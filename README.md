@@ -1,6 +1,6 @@
-# Transcriptcut - Video Editing Through Text Editing
+# Edit Video with Text
 
-Edit video by editing text. Delete words to delete video. Reorder words to reorder video. That's it.
+ Delete words to delete video. Reorder words to reorder video. 
 
 ## Installation
 
