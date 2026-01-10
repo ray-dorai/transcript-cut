@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Generated files
+*_timing.json
+*_edited.txt
+*_output.mp4
+*_final.mp4
+*_temp/
+
+# Video files (large)
+*.mp4
+
+# Archives
+*.zip
+
+# Claude
+.claude/
