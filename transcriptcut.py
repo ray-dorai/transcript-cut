@@ -58,26 +58,26 @@ def extract_transcript(video_path):
                 "start": word_data["start"],
                 "end": word_data["end"]
             })
-    
+
     # Save timing data
     timing_file = f"{base_name}_timing.json"
     with open(timing_file, "w") as f:
         json.dump(words, f, indent=2)
-    
-    # Save editable transcript
+
+    # Save editable transcript (one segment per line)
     edit_file = f"{base_name}_edited.txt"
-    plain_text = " ".join(w["word"] for w in words)
+    segments = [seg["text"].strip() for seg in result["segments"]]
     with open(edit_file, "w") as f:
-        f.write(plain_text)
+        f.write('\n'.join(segments))
     
     # Clean up audio file
     os.remove(audio_path)
     
-    print(f"\n✓ Transcript extracted: {len(words)} words")
+    print(f"\n✓ Transcript extracted: {len(segments)} segments, {len(words)} words")
     print(f"  Edit this file: {edit_file}")
     print(f"  Then run: python {sys.argv[0]} render {video_path} {edit_file}")
-    print(f"\nTip: Add padding with [before,after] syntax, e.g.:")
-    print(f"  'some words [0.5,0.2]' = 0.5s before, 0.2s after")
+    print(f"\nTip: Delete lines to remove, reorder as needed.")
+    print(f"  Add padding with [before,after] syntax: 'some words [0.5,0.2]'")
     
     return edit_file, timing_file
 
