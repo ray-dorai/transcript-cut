@@ -165,6 +165,7 @@ def align_transcripts_with_padding(parsed_segments, word_timings):
         if matched:
             merged = {
                 'word': ' '.join(s['word'] for s in matched),
+                'words': matched,  # Keep individual word timings for phrase-by-phrase subtitles
                 'start': max(0, matched[0]['start'] - segment_info['padding_before']),
                 'end': matched[-1]['end'] + segment_info['padding_after'],
                 'raw_start': matched[0]['start'],
@@ -177,9 +178,10 @@ def align_transcripts_with_padding(parsed_segments, word_timings):
     return all_segments
 
 
-def render_video(video_path, edited_text_file, output_path=None, 
-                 default_padding_before=PADDING_BEFORE, 
-                 default_padding_after=PADDING_AFTER):
+def render_video(video_path, edited_text_file, output_path=None,
+                 default_padding_before=PADDING_BEFORE,
+                 default_padding_after=PADDING_AFTER,
+                 captions=True):
     """Pass 2: Reassemble video based on edited transcript"""
     video_path = Path(video_path).resolve()
     base_name = video_path.stem
@@ -250,38 +252,74 @@ def render_video(video_path, edited_text_file, output_path=None,
         '-i', str(concat_file), '-c', 'copy', str(output_path), '-y'
     ], check=True, capture_output=True)
     
-    # Generate and burn in captions
-    print("Adding captions...")
-    srt_file = temp_dir / "captions.srt"
-    current_time = 0.0
-    with open(srt_file, "w") as f:
-        for i, seg in enumerate(segments, 1):
-            segment_duration = seg["end"] - seg["start"]
-            speech_duration = seg["raw_end"] - seg["raw_start"]
-
-            # Speech starts after padding_before within each segment
-            caption_start = current_time + seg["padding_before"]
-            caption_end = caption_start + speech_duration
-
-            f.write(f"{i}\n{format_srt_time(caption_start)} --> {format_srt_time(caption_end)}\n{seg['word']}\n\n")
-
-            current_time += segment_duration
-    
-    # Burn in subtitles (escape path for ffmpeg filter syntax)
     final_output = f"{base_name}_final.mp4"
-    escaped_srt = str(srt_file).replace('\\', '\\\\').replace(':', '\\:').replace("'", "\\'")
-    subprocess.run([
-        'ffmpeg', '-i', str(output_path),
-        '-vf', f"subtitles={escaped_srt}:force_style='Fontsize=24'",
-        '-c:a', 'copy', str(final_output), '-y'
-    ], check=True, capture_output=True)
-    
+
+    if not captions:
+        # No captions - just use concatenated output
+        os.rename(output_path, final_output)
+    else:
+        # Generate and burn in captions (phrase-by-phrase for better pacing)
+        print("Adding captions...")
+        srt_file = temp_dir / "captions.srt"
+        current_time = 0.0
+        srt_index = 1
+        WORDS_PER_PHRASE = 5
+
+        with open(srt_file, "w") as f:
+            for seg in segments:
+                segment_duration = seg["end"] - seg["start"]
+                seg_start_time = current_time + seg["padding_before"]
+                words = seg.get('words', [])
+
+                # Chunk words into phrases
+                for i in range(0, len(words), WORDS_PER_PHRASE):
+                    chunk = words[i:i + WORDS_PER_PHRASE]
+                    phrase_text = ' '.join(w['word'] for w in chunk)
+
+                    # Timing relative to segment start
+                    phrase_start = seg_start_time + (chunk[0]['start'] - seg['raw_start'])
+                    phrase_end = seg_start_time + (chunk[-1]['end'] - seg['raw_start'])
+
+                    f.write(f"{srt_index}\n{format_srt_time(phrase_start)} --> {format_srt_time(phrase_end)}\n{phrase_text}\n\n")
+                    srt_index += 1
+
+                current_time += segment_duration
+
+        # Get video dimensions and rotation for scaling subtitles
+        probe = subprocess.run([
+            'ffprobe', '-v', 'error', '-select_streams', 'v:0',
+            '-show_entries', 'stream=width,height', '-of', 'csv=p=0',
+            str(output_path)
+        ], capture_output=True, text=True)
+        width, height = map(int, probe.stdout.strip().split(','))
+
+        # Check for rotation metadata (phone videos)
+        rot_probe = subprocess.run([
+            'ffprobe', '-v', 'error', '-select_streams', 'v:0',
+            '-show_entries', 'stream_tags=rotate', '-of', 'csv=p=0',
+            str(output_path)
+        ], capture_output=True, text=True)
+        rotation = int(rot_probe.stdout.strip()) if rot_probe.stdout.strip() else 0
+        if rotation in (90, 270):
+            width, height = height, width  # Swap for rotated video
+
+        # Font as % of height, accounting for ASS scaling (scales with width, not height)
+        target_pct = 0.03 if height > width else 0.05  # 3% for vertical, 5% for horizontal
+        font_size = max(8, int(target_pct * 384 * height / width))
+        escaped_srt = str(srt_file).replace('\\', '\\\\').replace(':', '\\:').replace("'", "\\'")
+        subprocess.run([
+            'ffmpeg', '-i', str(output_path),
+            '-vf', f"subtitles={escaped_srt}:force_style='Fontsize={font_size}'",
+            '-c:a', 'copy', str(final_output), '-y'
+        ], check=True, capture_output=True)
+
+        os.remove(output_path)
+        srt_file.unlink()
+
     # Clean up
-    os.remove(output_path)
     for seg_file in segment_files:
         seg_file.unlink()
     concat_file.unlink()
-    srt_file.unlink()
     temp_dir.rmdir()
     
     # Calculate stats
@@ -362,8 +400,10 @@ if __name__ == "__main__":
         if "--padding-after" in sys.argv:
             idx = sys.argv.index("--padding-after")
             padding_after = float(sys.argv[idx + 1])
-        
-        render_video(video_path, edited_file, None, padding_before, padding_after)
+
+        captions = "--no-captions" not in sys.argv
+
+        render_video(video_path, edited_file, None, padding_before, padding_after, captions)
     
     else:
         print(f"Unknown command: {command}")
