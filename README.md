@@ -26,7 +26,7 @@ This creates:
 
 ### Step 2: Edit the Text
 
-Open `video_edited.txt` in any text editor. Delete words, reorder them, whatever you want.
+Open `video_edited.txt` in any text editor. Delete words, reorder them. Add padding in seconds before and after with [before,after], like [0.1,0.9].
 
 ### Step 3: Render Your Edit
 ```bash
@@ -65,13 +65,6 @@ This means:
 - Line 3: -0.1s before (tight cut), 0.3s after
 - Line 4: No padding (sharp cut both ends)
 
-## Features
-
-- **Automatic silence speedup**: Speeds up silences 4x within kept segments
-- **Burned-in captions**: Adds subtitles automatically (helps when audio gets choppy)
-- **Simple alignment**: Just finds your edited words in order - no complex algorithms
-- **Line-based editing**: Put different segments on different lines for cleaner cuts
-
 ## How It Works
 
 1. **Whisper** transcribes the video with word-level timestamps
@@ -79,8 +72,6 @@ This means:
 3. The script matches your edited words back to their timestamps
 4. **ffmpeg** extracts and concatenates the matching segments
 5. Captions are generated and burned in
-
-The key insight: editing video is really just editing text if you have good timestamps.
 
 ## Examples
 
@@ -116,8 +107,7 @@ We've never seen anything like it [0.2,0.5]
 
 ## Files
 
-- `transcriptcut.py` - The entire tool (300 lines)
+- `transcriptcut.py` - The entire tool 
 - `requirements.txt` - Just needs whisper
 - `README.md` - This file
 
-That's it. No frameworks, no databases, no GUI. Just text editing.
