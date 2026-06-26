@@ -1,1 +1,8 @@
-openai-whisper==20231117
+# No Python runtime dependencies — transcriptcut.py uses only the stdlib.
+# External binaries used at runtime (resolved from ./bin/ or $PATH):
+#   - whisper-cli  (whisper.cpp)
+#   - ffmpeg, ffprobe
+# External asset:
+#   - models/ggml-small.bin
+#
+# To build the distributable bundles, see build/.

@@ -1,0 +1,72 @@
+macOS bundle — what's left to do
+================================
+
+The Linux bundle is built and verified. The macOS side needs one
+platform-specific thing that can only come from a real Mac:
+
+    whisper-cli compiled for macOS (Intel + Apple Silicon)
+
+Everything else (Python interpreter, ffmpeg, model, the script itself,
+launcher) can be fetched or built on Linux.
+
+ON THE BORROWED MAC (~30 min, one time)
+---------------------------------------
+Run these on any Mac with Xcode Command Line Tools (`xcode-select --install`):
+
+    git clone --depth 1 --branch v1.8.4 https://github.com/ggml-org/whisper.cpp.git
+    cd whisper.cpp
+
+    # Build for Intel
+    cmake -B build-x86_64 \
+        -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
+        -DGGML_NATIVE=OFF -DGGML_METAL=OFF \
+        -DWHISPER_BUILD_EXAMPLES=ON -DWHISPER_BUILD_TESTS=OFF \
+        -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+        -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13
+    cmake --build build-x86_64 -j --target whisper-cli
+
+    # Build for Apple Silicon
+    cmake -B build-arm64 \
+        -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
+        -DGGML_NATIVE=OFF -DGGML_METAL=OFF \
+        -DWHISPER_BUILD_EXAMPLES=ON -DWHISPER_BUILD_TESTS=OFF \
+        -DCMAKE_OSX_ARCHITECTURES=arm64 \
+        -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+        -DCMAKE_C_COMPILER_TARGET=arm64-apple-macos11 \
+        -DCMAKE_CXX_COMPILER_TARGET=arm64-apple-macos11
+    cmake --build build-arm64 -j --target whisper-cli
+
+Copy the two resulting binaries onto a USB:
+
+    build-x86_64/bin/whisper-cli   →  whisper-cli-macos-x86_64
+    build-arm64/bin/whisper-cli    →  whisper-cli-macos-arm64
+
+Note: an arm64 binary requires macOS 11+ (Apple Silicon didn't exist
+before that). Intel target is 10.13 (2017), matching the project goal.
+
+BACK ON LINUX
+-------------
+Drop both binaries into a `vendor/` dir at the repo root:
+
+    transcript-cut/vendor/whisper-cli-macos-x86_64
+    transcript-cut/vendor/whisper-cli-macos-arm64
+
+Then a `build-macos.sh` (to be written) will assemble each macOS bundle
+on Linux using:
+
+  - vendor/whisper-cli-macos-<arch>   (from the Mac)
+  - python-build-standalone macOS tarball  (downloaded)
+  - static ffmpeg for macOS  (evermeet.cx / osxexperts.net, downloaded)
+  - ggml-small.bin  (downloaded, same model as Linux)
+  - transcriptcut.py + launcher + README  (from this repo)
+
+Output:  dist/TranscriptCut-macOS-x86_64/  and  dist/TranscriptCut-macOS-arm64/
+
+Both directories ship onto USB the same way the Linux bundle does.
+
+GATEKEEPER
+----------
+The bundles will be unsigned. Files copied off USB via Finder do NOT
+receive the quarantine xattr, so Gatekeeper usually stays quiet.
+Fallback for users who hit "cannot be opened": right-click
+TranscriptCut.command → Open → Open. One-time per machine.
