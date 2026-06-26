@@ -12,6 +12,11 @@ __pycache__/
 # Video files (large)
 *.mp4
 
+# Audio files (large)
+*.mp3
+*.aac
+*.wav
+
 # Archives
 *.zip
 
